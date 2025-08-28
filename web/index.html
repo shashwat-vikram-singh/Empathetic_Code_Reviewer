@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Empathetic Code Reviewer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        dark: {
+                            100: '#1e293b',
+                            200: '#172033',
+                            300: '#0f172a',
+                            400: '#0a0f1d',
+                            500: '#0c1427',
+                        },
+                        primary: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            200: '#bae6fd',
+                            300: '#7dd3fc',
+                            400: '#38bdf8',
+                            500: '#0ea5e9',
+                            600: '#0284c7',
+                            700: '#0369a1',
+                            800: '#075985',
+                            900: '#0c4a6e',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'float': 'float 6s ease-in-out infinite',
+                    },
+                    keyframes: {
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0)' },
+                            '50%': { transform: 'translateY(-10px)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #0c1427 100%);
+            min-height: 100vh;
+            color: #e2e8f0;
+            line-height: 1.6;
+        }
+        
+        .glass-card {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.36);
+        }
+        
+        .gradient-text {
+            background: linear-gradient(135deg, #38bdf8 0%, #818cf8 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .gradient-border {
+            position: relative;
+            border-radius: 1rem;
+            z-index: 1;
+        }
+        
+        .gradient-border::before {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            background: linear-gradient(135deg, #38bdf8 0%, #818cf8 50%, #c084fc 100%);
+            border-radius: 1.1rem;
+            z-index: -1;
+        }
+        
+        .code-block {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.95rem;
+        }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 10px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.7);
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: linear-gradient(to bottom, #38bdf8, #818cf8);
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(to bottom, #0ea5e9, #6366f1);
+        }
+        
+        /* Animation for feedback generation */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+        
+        pre {
+            background: rgba(26, 36, 59, 0.9);
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            overflow-x: auto;
+            margin: 1.5rem 0;
+            position: relative;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            line-height: 1.5;
+        }
+        
+        pre code {
+            color: #f1f5f9;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.95rem;
+        }
+        
+        .copy-btn {
+            position: absolute;
+            top: 0.75rem;
+            right: 0.75rem;
+            background: rgba(30, 41, 59, 0.9);
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 0.5rem;
+            padding: 0.5rem 1rem;
+            color: #e2e8f0;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+        
+        .copy-btn:hover {
+            background: rgba(30, 41, 59, 1);
+            color: #f8fafc;
+            transform: translateY(-1px);
+        }
+        
+        .review-section {
+            border-left: 4px solid #38bdf8;
+            padding-left: 1.5rem;
+            margin: 2rem 0;
+            background: rgba(56, 189, 248, 0.07);
+            border-radius: 0 0.5rem 0.5rem 0;
+            padding: 1.25rem 1.5rem;
+        }
+        
+        .review-section h3 {
+            color: #93c5fd;
+            margin-bottom: 1rem;
+            font-weight: 600;
+            font-size: 1.25rem;
+        }
+        
+        .floating-element {
+            animation: float 6s ease-in-out infinite;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+        
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #0284c7 0%, #4f46e5 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        
+        .btn-secondary {
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(8px);
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+        
+        .btn-secondary:hover {
+            background: rgba(30, 41, 59, 0.95);
+            border-color: rgba(255, 255, 255, 0.25);
+            transform: translateY(-2px);
+        }
+        
+        textarea, #output {
+            border-radius: 0.75rem;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            background: rgba(15, 23, 42, 0.7);
+            backdrop-filter: blur(8px);
+            transition: all 0.3s ease;
+            color: #e2e8f0;
+            font-size: 1rem;
+        }
+        
+        textarea:focus {
+            outline: none;
+            border-color: rgba(56, 189, 248, 0.6);
+            box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
+            background: rgba(15, 23, 42, 0.8);
+        }
+        
+        label {
+            color: #cbd5e1;
+            font-weight: 500;
+            margin-bottom: 0.75rem;
+            display: block;
+            font-size: 1.05rem;
+        }
+        
+        h1, h2, h3, h4, h5, h6 {
+            color: #e2e8f0;
+            font-weight: 600;
+        }
+        
+        #output {
+            font-size: 1rem;
+            line-height: 1.7;
+        }
+        
+        #output h1 {
+            font-size: 1.8rem;
+            margin-top: 2rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        #output h2 {
+            font-size: 1.5rem;
+            margin-top: 1.8rem;
+            margin-bottom: 1.2rem;
+        }
+        
+        #output h3 {
+            font-size: 1.3rem;
+            margin-top: 1.5rem;
+            margin-bottom: 1rem;
+        }
+        
+        #output p {
+            margin-bottom: 1rem;
+        }
+        
+        #output ul, #output ol {
+            margin-bottom: 1.5rem;
+            padding-left: 1.5rem;
+        }
+        
+        #output li {
+            margin-bottom: 0.5rem;
+        }
+        
+        #output strong {
+            color: #93c5fd;
+            font-weight: 600;
+        }
+        
+        #output a {
+            color: #60a5fa;
+            text-decoration: underline;
+        }
+        
+        #output a:hover {
+            color: #3b82f6;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+    <!-- Header -->
+    <header class="py-6 px-6">
+        <div class="container mx-auto flex flex-col items-center">
+            <div class="flex items-center mb-3">
+                <div class="w-14 h-14 rounded-full bg-gradient-to-br from-primary-500 to-purple-500 flex items-center justify-center mr-4 shadow-lg">
+                    <i class="fas fa-code text-white text-2xl"></i>
+                </div>
+                <h1 class="text-4xl font-bold gradient-text">Empathetic Code Reviewer</h1>
+            </div>
+            <p class="text-center text-gray-300 text-lg">Transforming Critical Feedback into Constructive Growth</p>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-grow container mx-auto px-4 py-8">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-6xl mx-auto">
+            <!-- Input Section -->
+            <div class="glass-card rounded-xl p-7 gradient-border">
+                <div class="flex items-center mb-7">
+                    <div class="w-12 h-12 rounded-lg bg-primary-500/15 flex items-center justify-center mr-4">
+                        <i class="fas fa-pencil-alt text-primary-400 text-xl"></i>
+                    </div>
+                    <h2 class="text-2xl font-semibold gradient-text">Enter Your Code</h2>
+                </div>
+                
+                <div class="mb-7">
+                    <label for="code">
+                        <i class="fas fa-code mr-2 text-primary-400"></i>Code Snippet
+                    </label>
+                    <textarea 
+                        id="code" 
+                        rows="14" 
+                        placeholder="Paste your code here..." 
+                        class="w-full p-5 font-mono transition-all shadow-inner text-lg"
+                    >def get_active_users(users):
+  results = []
+  for u in users:
+    if u.is_active == True and u.profile_complete == True:
+      results.append(u)
+  return results</textarea>
+                </div>
+                
+                <div class="mb-7">
+                    <label for="comment">
+                        <i class="fas fa-comments mr-2 text-primary-400"></i>Review Comments (one per line)
+                    </label>
+                    <textarea 
+                        id="comment" 
+                        rows="5"
+                        placeholder="Enter your review comments (one per line)..." 
+                        class="w-full p-5 transition-all shadow-inner text-lg"
+                    >This is inefficient. Don't loop twice conceptually.
+Variable 'u' is a bad name.
+Boolean comparison '== True' is redundant.</textarea>
+                </div>
+                
+                <div class="flex space-x-5">
+                    <button 
+                        onclick="generateFeedback()" 
+                        class="btn-primary flex items-center justify-center px-7 py-4 rounded-xl font-medium flex-1 text-lg"
+                    >
+                        <i class="fas fa-sparkles mr-3"></i> Generate Feedback
+                    </button>
+                    
+                    <button 
+                        onclick="clearAll()" 
+                        class="btn-secondary flex items-center justify-center px-6 py-4 rounded-xl font-medium text-lg"
+                    >
+                        <i class="fas fa-broom mr-3"></i> Clear
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Output Section -->
+            <div class="glass-card rounded-xl p-7 gradient-border">
+                <div class="flex items-center mb-7">
+                    <div class="w-12 h-12 rounded-lg bg-green-500/15 flex items-center justify-center mr-4">
+                        <i class="fas fa-comment-dots text-green-400 text-xl"></i>
+                    </div>
+                    <h2 class="text-2xl font-semibold gradient-text">Constructive Feedback</h2>
+                </div>
+                
+                <div id="output" class="min-h-[400px] rounded-lg p-5 overflow-y-auto max-h-[600px] shadow-inner text-lg">
+                    <div class="text-gray-400 text-center py-16 flex flex-col items-center">
+                        <div class="floating-element w-20 h-20 rounded-full bg-gradient-to-br from-primary-500/15 to-purple-500/15 flex items-center justify-center mb-5">
+                            <i class="fas fa-comment-slash text-4xl text-primary-500/60"></i>
+                        </div>
+                        <p class="text-xl">Your empathetic feedback will appear here</p>
+                    </div>
+                </div>
+                
+                <div class="mt-7 flex justify-end">
+                    <button 
+                        onclick="copyFeedback()" 
+                        id="copyButton"
+                        class="btn-secondary px-6 py-3.5 rounded-lg font-medium text-lg flex items-center"
+                    >
+                        <i class="fas fa-copy mr-3"></i> Copy Feedback
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="py-6 text-center text-gray-400 text-base mt-10">
+        <p>Empathetic Code Reviewer &copy; 2023 | Transforming Critical Feedback into Constructive Growth</p>
+    </footer>
+
+    <script>
+        // Generate feedback function
+        async function generateFeedback() {
+            const code = document.getElementById('code').value;
+            const comments = document.getElementById('comment').value.split('\n').filter(c => c.trim() !== '');
+            const output = document.getElementById('output');
+            
+            if (!code || comments.length === 0) {
+                output.innerHTML = `
+                    <div class="bg-red-400/20 border border-red-400/40 text-red-300 px-5 py-4 rounded-lg flex items-center text-lg">
+                        <i class="fas fa-exclamation-circle mr-3"></i> Please enter both code and at least one comment.
+                    </div>
+                `;
+                return;
+            }
+
+            // Show loading state
+            output.innerHTML = `
+                <div class="flex flex-col items-center justify-center py-16">
+                    <div class="w-20 h-20 rounded-full bg-gradient-to-br from-primary-500/20 to-purple-500/20 flex items-center justify-center mb-5">
+                        <div class="animate-pulse-slow rounded-full h-10 w-10 border-b-2 border-primary-500"></div>
+                    </div>
+                    <p class="text-gray-400 text-xl">Generating empathetic feedback...</p>
+                </div>
+            `;
+
+            try {
+                // In a real implementation, this would call your API
+                // For demonstration, we'll simulate a response after a delay
+                await new Promise(resolve => setTimeout(resolve, 1500));
+                
+                // Generate the formatted feedback according to guidelines
+                let feedback = `# Code Review Feedback\n\n`;
+                feedback += `## Original Code\n\`\`\`\n${code}\n\`\`\`\n\n`;
+                
+                // Add sections for each comment
+                comments.forEach((comment, index) => {
+                    feedback += `---\n\n`;
+                    feedback += `### Analysis of Comment: "${comment}"\n\n`;
+                    
+                    // Generate appropriate responses based on the comment
+                    if (comment.toLowerCase().includes('inefficient') || comment.toLowerCase().includes('loop')) {
+                        feedback += `* **Positive Rephrasing:** "Great start on the logic here! For better performance, especially with large user lists, we can make this more efficient by combining the checks."\n\n`;
+                        feedback += `* **The 'Why':** Iterating through a list and performing checks can become slow as the list grows. By using more direct methods like list comprehensions, we can often achieve the same result with cleaner and faster code.\n\n`;
+                        feedback += `* **Suggested Improvement:**\n\`\`\`python\ndef get_active_users(users):\n    return [user for user in users if user.is_active and user.profile_complete]\n\`\`\`\n\n`;
+                        feedback += `**Resource:** [Python List Comprehensions](https://realpython.com/list-comprehension-python/)\n\n`;
+                    } else if (comment.toLowerCase().includes('variable') || comment.toLowerCase().includes('name') || comment.includes("'u'")) {
+                        feedback += `* **Positive Rephrasing:** "Good work implementing the iteration logic! Using descriptive variable names can make the code more readable and maintainable for everyone on the team."\n\n`;
+                        feedback += `* **The 'Why':** Clear variable names serve as documentation and make code easier to understand. Single-letter variables can be confusing and increase cognitive load for other developers reading the code.\n\n`;
+                        feedback += `* **Suggested Improvement:**\n\`\`\`python\n# Instead of 'u', use a more descriptive name like 'user'\nfor user in users:\n    if user.is_active and user.profile_complete:\n        results.append(user)\n\`\`\`\n\n`;
+                        feedback += `**Resource:** [PEP 8 - Style Guide for Python Code](https://peps.python.org/pep-0008/#function-and-variable-names)\n\n`;
+                    } else if (comment.toLowerCase().includes('boolean') || comment.toLowerCase().includes('redundant') || comment.includes('== True')) {
+                        feedback += `* **Positive Rephrasing:** "Nice implementation of the conditional checks! We can make this even more Pythonic by removing the explicit comparison to True."\n\n`;
+                        feedback += `* **The 'Why':** In Python, conditions already evaluate to True or False, so explicit comparison with '== True' is unnecessary. This is a common convention that makes code cleaner and more readable.\n\n`;
+                        feedback += `* **Suggested Improvement:**\n\`\`\`python\n# Instead of '== True', use the boolean directly\nif user.is_active and user.profile_complete:\n    results.append(user)\n\`\`\`\n\n`;
+                        feedback += `**Resource:** [Truth Value Testing in Python](https://docs.python.org/3/library/stdtypes.html#truth-value-testing)\n\n`;
+                    } else {
+                        // Generic response for other types of comments
+                        feedback += `* **Positive Rephrasing:** "Thanks for sharing this code! I have a suggestion that might help improve clarity and maintainability."\n\n`;
+                        feedback += `* **The 'Why':** Following established coding conventions and best practices makes code easier to read, maintain, and debug for all team members.\n\n`;
+                        feedback += `* **Suggested Improvement:**\n\`\`\`python\n# Implementation suggestion would go here\n# based on the specific feedback provided\n\`\`\`\n\n`;
+                        feedback += `**Resource:** [Code Review Best Practices](https://google.github.io/eng-practices/review/)\n\n`;
+                    }
+                });
+                
+                // Add a holistic summary
+                feedback += `---\n\n`;
+                feedback += `## Overall Summary\n\n`;
+                feedback += `Great work on this code! The logic is sound and you've successfully implemented the functionality. With the suggested improvements around efficiency, naming conventions, and Pythonic expressions, this code will be even more maintainable and performant. Keep up the good work!\n\n`;
+                feedback += `Remember that code reviews are about learning and improving together. Every developer has room to grow, and these suggestions are meant to help you become even better at your craft.`;
+                
+                // Parse Markdown to HTML using marked
+                const htmlOutput = marked.parse(feedback);
+                output.innerHTML = htmlOutput;
+                output.classList.add('fade-in');
+                
+                // Add copy functionality to code blocks
+                document.querySelectorAll('pre').forEach(pre => {
+                    const button = document.createElement('button');
+                    button.innerHTML = '<i class="fas fa-copy mr-2"></i> Copy';
+                    button.className = 'copy-btn';
+                    button.addEventListener('click', () => {
+                        navigator.clipboard.writeText(pre.querySelector('code').innerText);
+                        button.innerHTML = '<i class="fas fa-check mr-2"></i> Copied!';
+                        setTimeout(() => {
+                            button.innerHTML = '<i class="fas fa-copy mr-2"></i> Copy';
+                        }, 2000);
+                    });
+                    pre.style.position = 'relative';
+                    pre.appendChild(button);
+                });
+                
+            } catch (error) {
+                output.innerHTML = `
+                    <div class="bg-red-400/20 border border-red-400/40 text-red-300 px-5 py-4 rounded-lg flex items-center text-lg">
+                        <i class="fas fa-exclamation-triangle mr-3"></i> Error generating feedback: ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        // Clear all inputs
+        function clearAll() {
+            document.getElementById('code').value = '';
+            document.getElementById('comment').value = '';
+            document.getElementById('output').innerHTML = `
+                <div class="text-gray-400 text-center py-16 flex flex-col items-center">
+                    <div class="w-20 h-20 rounded-full bg-gradient-to-br from-primary-500/15 to-purple-500/15 flex items-center justify-center mb-5">
+                        <i class="fas fa-comment-slash text-4xl text-primary-500/60"></i>
+                    </div>
+                    <p class="text-xl">Your empathetic feedback will appear here</p>
+                </div>
+            `;
+        }
+
+        // Copy feedback function
+        function copyFeedback() {
+            const outputText = document.getElementById('output').innerText;
+            navigator.clipboard.writeText(outputText).then(() => {
+                const button = document.getElementById('copyButton');
+                button.innerHTML = '<i class="fas fa-check mr-3"></i> Copied!';
+                setTimeout(() => {
+                    button.innerHTML = '<i class="fas fa-copy mr-3"></i> Copy Feedback';
+                }, 2000);
+            });
+        }
+    </script>
+</body>
+</html>

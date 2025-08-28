@@ -1,0 +1,7 @@
+{
+  "code_snippet": "def hello():\n print('hi')",
+  "review_comments": [
+    "Function name should follow snake_case.",
+    "Print statement is not recommended in production code."
+  ]
+}
